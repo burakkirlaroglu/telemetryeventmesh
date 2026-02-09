@@ -1,0 +1,23 @@
+# env
+.env
+.env.*
+!.env.example
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.envrc
+
+# logs
+*.log
+logs/
+
+# docker
+**/data/
+**/volumes/
+
+# os/editor
+.DS_Store
+.idea/
+.vscode/
