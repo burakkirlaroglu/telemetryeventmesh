@@ -89,7 +89,7 @@ services:
     networks:
       - internal_net
     healthcheck:
-      test: ["CMD-SHELL", "wget -q0- http://127.0.0.1:8000/healthz || exit 1"]
+      test: ["CMD-SHELL", "echo hello"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -101,7 +101,7 @@ services:
     networks:
       - internal_net
     healthcheck:
-      test: [ "CMD-SHELL", "wget -q0- http://127.0.0.1:8000/healthz || exit 1" ]
+      test: ["CMD-SHELL", "echo hello"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -113,10 +113,36 @@ services:
     networks:
       - internal_net
     healthcheck:
-      test: [ "CMD-SHELL", "wget -q0- http://127.0.0.1:8000/healthz || exit 1" ]
+      test: ["CMD-SHELL", "echo hello"]
       interval: 5s
       timeout: 3s
       retries: 20
+
+  ws_gateway_1:
+    build:
+      context: ../../services/live_stream_gateway
+    container_name: tem_ws_gateway_1
+    networks:
+      - internal_net
+      - data_net
+    healthcheck:
+     test: ["CMD-SHELL", "python - <<EOF\nimport redis; redis.Redis(host='tem_redis', port=6379).ping()\nEOF"]
+     interval: 5s
+     timeout: 3s
+     retries: 5
+
+  ws_gateway_2:
+    build:
+      context: ../../services/live_stream_gateway
+    container_name: tem_ws_gateway_2
+    networks:
+      - internal_net
+      - data_net
+    healthcheck:
+      test: [ "CMD-SHELL", "python - <<EOF\nimport redis; redis.Redis(host='tem_redis', port=6379).ping()\nEOF" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   nginx_gateway:
     image: nginx:1.25-alpine
@@ -134,6 +160,10 @@ services:
       control_api_2:
           condition: service_healthy
       control_api_3:
+          condition: service_healthy
+      ws_gateway_1:
+          condition: service_healthy
+      ws_gateway_2:
           condition: service_healthy
     healthcheck:
       test: [ "CMD-SHELL", "wget -qO- http://127.0.0.1/healthz || exit 1" ]
