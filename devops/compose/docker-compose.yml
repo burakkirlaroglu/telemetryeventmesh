@@ -122,6 +122,10 @@ services:
     build:
       context: ../../services/live_stream_gateway
     container_name: tem_ws_gateway_1
+    environment:
+      GATEWAY_ID: tem_ws_gateway_1
+      REDIS_HOST: tem_redis
+      SESSION_TTL_SECONDS: "300"
     networks:
       - internal_net
       - data_net
@@ -135,6 +139,10 @@ services:
     build:
       context: ../../services/live_stream_gateway
     container_name: tem_ws_gateway_2
+    environment:
+      GATEWAY_ID: tem_ws_gateway_2
+      REDIS_HOST: tem_redis
+      SESSION_TTL_SECONDS: "300"
     networks:
       - internal_net
       - data_net
