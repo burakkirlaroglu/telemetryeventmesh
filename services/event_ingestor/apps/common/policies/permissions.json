@@ -1,0 +1,13 @@
+{
+  "roles": {
+    "producer": [
+      "required_permission values"
+    ],
+    "viewer": [
+      "required_permission values"
+    ],
+    "admin": [
+      "*"
+    ]
+  }
+}

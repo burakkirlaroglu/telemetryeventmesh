@@ -20,16 +20,14 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: tem_postgres
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-tem}
-      POSTGRES_USER: ${POSTGRES_USER:-tem}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tem_password_change_me}
+    env_file:
+      - .env
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - data_net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tem} -d ${POSTGRES_DB:-tem}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tem} -d ${POSTGRES_DB:-tem}" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -43,13 +41,13 @@ services:
   redis:
     image: redis:7-alpine
     container_name: tem_redis
-    command: ["redis-server", "--appendonly", "yes"]
+    command: [ "redis-server", "--appendonly", "yes" ]
     volumes:
       - redis_data:/data
     networks:
       - data_net
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -61,9 +59,8 @@ services:
   rabbitmq:
     image: rabbitmq:3.13-management
     container_name: tem_rabbitmq
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-tem}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-tem_password_change_me}
+    env_file:
+      - .env
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
@@ -73,7 +70,7 @@ services:
     ports:
       - "15672:15672"
     healthcheck:
-      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+      test: [ "CMD-SHELL", "rabbitmq-diagnostics -q ping" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -89,7 +86,7 @@ services:
     networks:
       - internal_net
     healthcheck:
-      test: ["CMD-SHELL", "echo hello"]
+      test: [ "CMD-SHELL", "echo hello" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -101,7 +98,7 @@ services:
     networks:
       - internal_net
     healthcheck:
-      test: ["CMD-SHELL", "echo hello"]
+      test: [ "CMD-SHELL", "echo hello" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -113,7 +110,7 @@ services:
     networks:
       - internal_net
     healthcheck:
-      test: ["CMD-SHELL", "echo hello"]
+      test: [ "CMD-SHELL", "echo hello" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -124,25 +121,8 @@ services:
     container_name: tem_ws_gateway_1
     environment:
       GATEWAY_ID: tem_ws_gateway_1
-      REDIS_HOST: tem_redis
-      SESSION_TTL_SECONDS: "300"
-    networks:
-      - internal_net
-      - data_net
-    healthcheck:
-     test: ["CMD-SHELL", "python - <<EOF\nimport redis; redis.Redis(host='tem_redis', port=6379).ping()\nEOF"]
-     interval: 5s
-     timeout: 3s
-     retries: 5
-
-  ws_gateway_2:
-    build:
-      context: ../../services/live_stream_gateway
-    container_name: tem_ws_gateway_2
-    environment:
-      GATEWAY_ID: tem_ws_gateway_2
-      REDIS_HOST: tem_redis
-      SESSION_TTL_SECONDS: "300"
+    env_file:
+      - .env
     networks:
       - internal_net
       - data_net
@@ -151,6 +131,40 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+
+  ws_gateway_2:
+    build:
+      context: ../../services/live_stream_gateway
+    container_name: tem_ws_gateway_2
+    environment:
+      GATEWAY_ID: tem_ws_gateway_2
+    env_file:
+      - .env
+    networks:
+      - internal_net
+      - data_net
+    healthcheck:
+      test: [ "CMD-SHELL", "python - <<EOF\nimport redis; redis.Redis(host='tem_redis', port=6379).ping()\nEOF" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  event_ingestor:
+    build:
+      context: ../../services/event_ingestor
+    container_name: tem_event_ingestor
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    networks:
+      - public_net
+      - internal_net
+      - data_net
+    ports:
+      - "8002:8002"
+
 
   nginx_gateway:
     image: nginx:1.25-alpine
@@ -164,15 +178,15 @@ services:
       - "80:80"
     depends_on:
       control_api_1:
-          condition: service_healthy
+        condition: service_healthy
       control_api_2:
-          condition: service_healthy
+        condition: service_healthy
       control_api_3:
-          condition: service_healthy
+        condition: service_healthy
       ws_gateway_1:
-          condition: service_healthy
+        condition: service_healthy
       ws_gateway_2:
-          condition: service_healthy
+        condition: service_healthy
     healthcheck:
       test: [ "CMD-SHELL", "wget -qO- http://127.0.0.1/healthz || exit 1" ]
       interval: 5s
