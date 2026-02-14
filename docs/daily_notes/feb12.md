@@ -21,7 +21,6 @@ Bu nedenle status bilgisini Event tablosundan ayırıp ayrı bir ProcessingState
 * Status update maliyeti daha küçük ve yönetilebilir bir tabloda gerçekleşecek.
 * Index stratejisi daha kontrollü tasarlanabilecek.
 
----
 
 ### Test Özeti
 
@@ -33,8 +32,8 @@ CPU stabil, latency düşük, p95 normal aralıkta.
 Durum 2 – Index var, düşük veri
 Hafif artış var ancak gözle görülür değil. Sistem rahat.
 
-Durum 3 – Index var, ~500k veri
-CPU 20-30 seviyesinden 50 civarına çıktı.
+Durum 3 – Index var, 500k+ veri
+CPU %20-30 seviyesinden %50-60 civarına çıktı.
 p95 değerlerinde belirgin artış oldu.
 Write maliyeti ciddi şekilde yükseldi ancak sistem tamamen çökmedi.
 

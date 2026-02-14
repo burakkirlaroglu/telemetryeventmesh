@@ -22,6 +22,9 @@ services:
     container_name: tem_postgres
     env_file:
       - .env
+    command: >
+      postgres
+      -c shared_preload_libraries=pg_stat_statements
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -31,8 +34,6 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
-    # Güvenlik: Dışarı port publish etmiyoruz.
-    # Performans/kararlılık: aşırı kaynak tüketmesin diye limit.
     deploy:
       resources:
         limits:
@@ -65,8 +66,7 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - data_net
-    # NOT: management UI (15672) prod'da public'e açılmaz.
-    # Dev'de görmek istersen sadece localhost'a publish edeceğiz (aşağıdaki ports).
+    # TODO: management UI (15672) prod da public e açılmaz.
     ports:
       - "15672:15672"
     healthcheck:
@@ -159,11 +159,20 @@ services:
     env_file:
       - .env
     networks:
-      - public_net
       - internal_net
       - data_net
-    ports:
-      - "8002:8002"
+
+  worker:
+    build:
+      context: ../../services/event_ingestor
+    command: celery -A config worker -l info
+    depends_on:
+      - rabbitmq
+      - redis
+      - postgres
+    networks:
+      - internal_net
+      - data_net
 
 
   nginx_gateway:
@@ -192,114 +201,3 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
-
-
-
-
-
-#name: telemetryeventmesh
-#
-#networks:
-#  public_net:
-#    name: tem_public_net
-#  internal_net:
-#    name: tem_internal_net
-#    internal: true
-#  data_net:
-#    name: tem_data_net
-#    internal: true
-#
-#volumes:
-#  postgres_data:
-#  redis_data:
-#  rabbitmq_data:
-#
-#services:
-#  postgres:
-#    image: postgres:16-alpine
-#    container_name: tem_postgres
-#    environment:
-#      POSTGRES_DB: ${POSTGRES_DB:-tem}
-#      POSTGRES_USER: ${POSTGRES_USER:-tem}
-#      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tem_password_change_me}
-#    volumes:
-#      - postgres_data:/var/lib/postgresql/data
-#    networks:
-#      - data_net
-#    healthcheck:
-#      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tem} -d ${POSTGRES_DB:-tem}"]
-#      interval: 5s
-#      timeout: 3s
-#      retries: 20
-#    # Güvenlik: Dışarı port publish etmiyoruz.
-#    # Performans/kararlılık: aşırı kaynak tüketmesin diye limit.
-#    deploy:
-#      resources:
-#        limits:
-#          memory: 768M
-#
-#  redis:
-#    image: redis:7-alpine
-#    container_name: tem_redis
-#    command: ["redis-server", "--appendonly", "yes"]
-#    volumes:
-#      - redis_data:/data
-#    networks:
-#      - data_net
-#    healthcheck:
-#      test: ["CMD", "redis-cli", "ping"]
-#      interval: 5s
-#      timeout: 3s
-#      retries: 20
-#    deploy:
-#      resources:
-#        limits:
-#          memory: 256M
-#
-#  rabbitmq:
-#    image: rabbitmq:3-management-alpine
-#    container_name: tem_rabbitmq
-#    environment:
-#      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-tem}
-#      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-tem_password_change_me}
-#    volumes:
-#      - rabbitmq_data:/var/lib/rabbitmq
-#    networks:
-#      - data_net
-#    # NOT: management UI (15672) prod'da public'e açılmaz.
-#    # Dev'de görmek istersen sadece localhost'a publish edeceğiz (aşağıdaki ports).
-#    ports:
-#      - "127.0.0.1:15672:15672"
-#    healthcheck:
-#      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
-#      interval: 5s
-#      timeout: 5s
-#      retries: 20
-#    deploy:
-#      resources:
-#        limits:
-#          memory: 512M
-#
-#  # Şimdilik "gateway" yerine duman testi için minik bir echo servisi koyuyoruz.
-#  # Amaç: public_net'in çalıştığını ve dışa tek kapının nasıl olacağını ispatlamak.
-#  public_echo:
-#    image: hashicorp/http-echo:1.0
-#    container_name: tem_public_echo
-#    command: ["-listen=:8080", "-text=telemetryeventmesh is up (public edge OK)"]
-#    networks:
-#      - public_net
-#      - internal_net
-#    ports:
-#      - "8080:8080"
-#    healthcheck:
-#      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080 >/dev/null 2>&1 || exit 1"]
-#      interval: 5s
-#      timeout: 3s
-#      retries: 20
-#    depends_on:
-#      postgres:
-#        condition: service_healthy
-#      redis:
-#        condition: service_healthy
-#      rabbitmq:
-#        condition: service_healthy
