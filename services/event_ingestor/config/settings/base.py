@@ -9,6 +9,10 @@ env = environ.Env(
     ALLOWED_HOSTS=(list, ["localhost", "127.0.0.1"]),
 )
 
+task_acks_late = True
+task_reject_on_worker_lost = True   # worker ölürse mesaj broker a geri düşsün
+worker_prefetch_multiplier = 1      # her worker aynı anda az iş alsın
+
 environ.Env.read_env(BASE_DIR / ".env")
 
 SECRET_KEY = env("SECRET_KEY")

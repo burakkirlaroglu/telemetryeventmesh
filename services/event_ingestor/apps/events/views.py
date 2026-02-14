@@ -1,10 +1,22 @@
+from django.db import transaction
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
-
+from .models import StatusEnum, ProcessingState
 from .serializers import EventIngestSerializer
 from ..common.permissions import HasAPIPermission
+from .tasks import process_events_batch
+
+
+def enqueue_event(event):
+    state = ProcessingState.objects.get(event=event)
+    state.status = StatusEnum.QUEUED
+    state.save(update_fields=["status"])
+
+    transaction.on_commit(
+        lambda: process_events_batch.delay()
+    )
 
 
 class EventIngestView(APIView):
@@ -18,6 +30,13 @@ class EventIngestView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         event = serializer.save()
+
+        ProcessingState.objects.create(
+            event=event,
+            status=StatusEnum.ACCEPTED
+        )
+
+        enqueue_event(event=event)
 
         return Response(
             {

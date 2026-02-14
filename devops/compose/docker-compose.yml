@@ -170,6 +170,8 @@ services:
       - rabbitmq
       - redis
       - postgres
+    env_file:
+      - .env
     networks:
       - internal_net
       - data_net

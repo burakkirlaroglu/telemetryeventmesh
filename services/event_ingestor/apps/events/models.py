@@ -28,6 +28,7 @@ class Event(models.Model):
 
 class StatusEnum(TextChoices):
     ACCEPTED = "accepted", "Accepted"
+    QUEUED = "queued", "Queued"
     PROCESSING = "processing", "Processing"
     PROCESSED = "processed", "Processed"
     FAILED = "failed", "Failed"
