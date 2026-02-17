@@ -60,3 +60,16 @@ class ProcessingState(models.Model):
 
     def __str__(self):
         return f"{self.event_id} - {self.status}"
+
+
+class ProcessedEventLog(models.Model):
+    event = models.OneToOneField(
+        Event,
+        on_delete=models.CASCADE,
+        related_name="processed_log",
+    )
+
+    processed_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.event_id} processed"

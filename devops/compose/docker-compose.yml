@@ -189,7 +189,29 @@ services:
       - internal_net
       - data_net
 
+  celery_worker_processing:
+    build: ../../services/event_ingestor
+    command: celery -A config.celery_app worker -Q processing_queue --loglevel=info --concurrency=2
+    env_file:
+      - .env
+    depends_on:
+      - rabbitmq
+      - postgres
+    networks:
+      - internal_net
+      - data_net
 
+  celery_worker_maintenance:
+    build: ../../services/event_ingestor
+    command: celery -A config.celery_app worker -Q maintenance_queue --loglevel=info --concurrency=1
+    env_file:
+      - .env
+    depends_on:
+      - rabbitmq
+      - postgres
+    networks:
+      - internal_net
+      - data_net
 
   nginx_gateway:
     image: nginx:1.25-alpine

@@ -7,6 +7,15 @@ app = Celery("event_ingestor")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
 
+from kombu import Queue
+
+app.conf.task_queues = (
+    Queue("processing_queue"),
+    Queue("maintenance_queue"),
+)
+
+app.conf.task_default_queue = "processing_queue"
+
 from celery.schedules import crontab
 
 app.conf.beat_schedule = {
@@ -15,4 +24,3 @@ app.conf.beat_schedule = {
         "schedule": 60.0,
     },
 }
-
