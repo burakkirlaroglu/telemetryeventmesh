@@ -176,6 +176,20 @@ services:
       - internal_net
       - data_net
 
+  celery_beat:
+    build:
+      context: ../../services/event_ingestor
+    command: celery -A config.celery_app beat --loglevel=info
+    env_file:
+      - .env
+    depends_on:
+      - rabbitmq
+      - postgres
+    networks:
+      - internal_net
+      - data_net
+
+
 
   nginx_gateway:
     image: nginx:1.25-alpine

@@ -1,6 +1,7 @@
+from django.utils import timezone
+from datetime import timedelta
 from celery import shared_task
 from django.db import transaction
-from django.utils import timezone
 
 from .models import ProcessingState, StatusEnum
 
@@ -39,3 +40,30 @@ def process_events_batch(self, batch_size=10):
                 state.save(update_fields=["status", "updated_at"])
 
     return processed_count
+
+
+@shared_task
+def recover_stuck_processing(timeout_seconds=60, batch_size=50):
+    threshold = timezone.now() - timedelta(seconds=timeout_seconds)
+
+    recovered = 0
+
+    with transaction.atomic():
+        stuck_states = (
+            ProcessingState.objects
+            .select_for_update(skip_locked=True)
+            .filter(
+                status=StatusEnum.PROCESSING,
+                locked_at__lt=threshold
+            )
+            .order_by("locked_at")[:batch_size]
+        )
+
+        for state in stuck_states:
+            state.status = StatusEnum.QUEUED
+            state.worker_id = None
+            state.locked_at = None
+            state.save(update_fields=["status", "worker_id", "locked_at", "updated_at"])
+            recovered += 1
+
+    return recovered
