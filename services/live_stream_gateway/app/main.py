@@ -1,65 +1,53 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-import uuid
-import os
-import time
+from typing import List
 import redis
+import asyncio
+import os
 
-app = FastAPI(title="telemetryeventmesh-ws-gateway")
+app = FastAPI()
 
 REDIS_HOST = os.getenv("REDIS_HOST", "tem_redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
-GATEWAY_ID = os.getenv("GATEWAY_ID", "unknown-gateway")
 
-r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
-SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "300"))
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
 
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        print("client bağlandı")
+        self.active_connections.append(websocket)
 
-def session_key(user_id: str) -> str:
-    return f"ws:session:{user_id}"
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
 
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            await connection.send_text(message)
+
+manager = ConnectionManager()
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
-    user_id = ws.query_params.get("user_id")
-    if not user_id:
-        await ws.close(code=1008)
-        return
-
-    await ws.accept()
-
-    now = int(time.time())
-    conn_id = str(uuid.uuid4())
-
-    old = r.hgetall(session_key(user_id))
-    if old:
-        last_seq = old.get("last_msg_seq", "0")
-        await ws.send_text(f"resume:last_msg_seq={last_seq}")
-
-    r.hset(
-        session_key(user_id),
-        mapping={
-            "user_id": user_id,
-            "conn_id": conn_id,
-            "gateway_id": GATEWAY_ID,
-            "status": "connected",
-            "connected_at": str(now),
-            "last_seen_at": str(now),
-            "last_msg_seq": old.get("last_msg_seq", "0") if old else "0",
-        },
-    )
-    r.expire(session_key(user_id), SESSION_TTL_SECONDS)
-
+    await manager.connect(ws)
     try:
         while True:
-            msg = await ws.receive_text()
-
-            seq = r.hincrby(session_key(user_id), "last_msg_seq", 1)
-            r.hset(session_key(user_id), mapping={"last_seen_at": str(int(time.time()))})
-            r.expire(session_key(user_id), SESSION_TTL_SECONDS)
-
-            await ws.send_text(f"seq={seq} echo={msg}")
-
+            await ws.receive_text()  # ignore client input
     except WebSocketDisconnect:
-        r.hset(session_key(user_id), mapping={"status": "disconnected", "last_seen_at": str(int(time.time()))})
-        r.expire(session_key(user_id), SESSION_TTL_SECONDS)
+        manager.disconnect(ws)
+
+async def redis_listener():
+    pubsub = redis_client.pubsub()
+    pubsub.subscribe("tem:events")
+
+    while True:
+        message = pubsub.get_message(ignore_subscribe_messages=True)
+        if message:
+            await manager.broadcast(message["data"])
+        await asyncio.sleep(0.01)
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(redis_listener())
