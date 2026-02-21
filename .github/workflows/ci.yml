@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tem
+          POSTGRES_PASSWORD: tem_password_change_me
+          POSTGRES_DB: tem
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U tem"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          pip install -r services/event_ingestor/requirements.txt
+
+      - name: Run migrations (with retry)
+        env:
+          POSTGRES_HOST: localhost
+          DATABASE_URL: postgres://tem:tem_password_change_me@localhost:5432/tem
+          DJANGO_SETTINGS_MODULE: config.settings.prod
+          CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
+          CELERY_RESULT_BACKEND: redis://redis:6379/0
+          DJANGO_SECRET_KEY: dev-secret-change-me
+          DJANGO_DEBUG: False
+          REDIS_PORT: 6379
+          REDIS_HOST: redis
+        run: |
+          cd services/event_ingestor
+          for i in {1..10}; do
+            python manage.py migrate && break
+            echo "Waiting for DB..."
+            sleep 3
+          done
+
+      - name: Run tests
+        env:
+          POSTGRES_HOST: localhost
+          DATABASE_URL: postgres://tem:tem_password_change_me@localhost:5432/tem
+          DJANGO_SETTINGS_MODULE: config.settings.prod
+          CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
+          CELERY_RESULT_BACKEND: redis://redis:6379/0
+          DJANGO_SECRET_KEY: dev-secret-change-me
+          DJANGO_DEBUG: False
+          REDIS_PORT: 6379
+          REDIS_HOST: redis
+        run: |
+          cd services/event_ingestor
+          python manage.py test
