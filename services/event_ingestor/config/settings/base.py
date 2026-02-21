@@ -66,8 +66,11 @@ DATABASES = {
     "default": env.db("DATABASE_URL", default="sqlite:///db.sqlite3")
 }
 
-CELERY_BROKER_URL = "amqp://guest:guest@rabbitmq:5672//"
-CELERY_RESULT_BACKEND = "redis://redis:6379/0"
+CELERY_BROKER_URL = env("CELERY_BROKER_URL")
+CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND")
+
+REDIS_HOST = env("REDIS_HOST")
+REDIS_PORT = env("REDIS_PORT")
 
 AUTH_PASSWORD_VALIDATORS = []
 

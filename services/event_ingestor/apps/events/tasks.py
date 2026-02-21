@@ -2,6 +2,8 @@ from django.utils import timezone
 from datetime import timedelta
 from celery import shared_task
 from django.db import transaction, IntegrityError
+import redis
+from django.conf import settings
 
 from .models import ProcessingState, StatusEnum, ProcessedEventLog
 import logging
@@ -12,6 +14,12 @@ logger = logging.getLogger(__name__)
 
 @shared_task(bind=True, queue="processing_queue", acks_late=True)
 def process_events_batch(self, batch_size=10):
+    r = redis.Redis(
+        host=settings.REDIS_HOST,
+        port=settings.REDIS_PORT,
+        decode_responses=True,
+    )
+
     processed_count = 0
     while True:
         with transaction.atomic():
@@ -55,6 +63,15 @@ def process_events_batch(self, batch_size=10):
                     "status_to": "processed",
                 }))
 
+                payload = {
+                    "type": "event.update",
+                    "event_id": str(state.event_id),
+                    "status": state.status,
+                }
+
+                r.publish("tem:events", json.dumps(payload))
+
+
             except IntegrityError:
                 # Event already processed - db level Idempotency
                 state.status = StatusEnum.PROCESSED
@@ -64,6 +81,15 @@ def process_events_batch(self, batch_size=10):
                     "type": "event.process.idempotency_conflict",
                     "event_id": str(state.event_id),
                 }))
+
+                payload = {
+                    "type": "event.update",
+                    "event_id": str(state.event_id),
+                    "status": state.status,
+                }
+
+                r.publish("tem:events", json.dumps(payload))
+
 
             except Exception:
                 state.status = StatusEnum.FAILED
