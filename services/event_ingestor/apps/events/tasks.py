@@ -4,6 +4,10 @@ from celery import shared_task
 from django.db import transaction, IntegrityError
 
 from .models import ProcessingState, StatusEnum, ProcessedEventLog
+import logging
+import json
+
+logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, queue="processing_queue", acks_late=True)
@@ -36,13 +40,41 @@ def process_events_batch(self, batch_size=10):
                 state.status = StatusEnum.PROCESSED
                 state.save(update_fields=["status", "updated_at"])
                 processed_count += 1
+                now = timezone.now()
+                duration_ms = None
+
+                if state.locked_at:
+                    duration_ms = int((now - state.locked_at).total_seconds() * 1000)
+
+                logger.info(json.dumps({
+                    "type": "event.process.succeeded",
+                    "event_id": str(state.event_id),
+                    "worker_id": state.worker_id,
+                    "duration_ms": duration_ms,
+                    "status_from": "processing",
+                    "status_to": "processed",
+                }))
+
             except IntegrityError:
                 # Event already processed - db level Idempotency
                 state.status = StatusEnum.PROCESSED
                 state.save(update_fields=["status", "updated_at"])
+
+                logger.warning(json.dumps({
+                    "type": "event.process.idempotency_conflict",
+                    "event_id": str(state.event_id),
+                }))
+
             except Exception:
                 state.status = StatusEnum.FAILED
                 state.save(update_fields=["status", "updated_at"])
+
+                logger.error(json.dumps({
+                    "type": "event.process.failed",
+                    "event_id": str(state.event_id),
+                    "worker_id": state.worker_id,
+                    "status": "failed",
+                }))
 
     return processed_count
 
@@ -70,5 +102,10 @@ def recover_stuck_processing(timeout_seconds=60, batch_size=50):
             state.locked_at = None
             state.save(update_fields=["status", "worker_id", "locked_at", "updated_at"])
             recovered += 1
+
+    logger.warning(json.dumps({
+        "type": "event.process.recovered",
+        "requeued_count": recovered,
+    }))
 
     return recovered
