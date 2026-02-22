@@ -46,7 +46,7 @@ jobs:
           DJANGO_SECRET_KEY: dev-secret-change-me
           DJANGO_DEBUG: False
           REDIS_PORT: 6379
-          REDIS_HOST: redis
+          REDIS_HOST: localhost
         run: |
           cd services/event_ingestor
           for i in {1..10}; do
@@ -59,13 +59,13 @@ jobs:
         env:
           POSTGRES_HOST: localhost
           DATABASE_URL: postgres://tem:tem_password_change_me@localhost:5432/tem
-          DJANGO_SETTINGS_MODULE: config.settings.prod
+          DJANGO_SETTINGS_MODULE: config.settings.test
           CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
           CELERY_RESULT_BACKEND: redis://redis:6379/0
           DJANGO_SECRET_KEY: dev-secret-change-me
           DJANGO_DEBUG: False
           REDIS_PORT: 6379
-          REDIS_HOST: redis
+          REDIS_HOST: localhost
         run: |
           cd services/event_ingestor
           python manage.py test

@@ -7,6 +7,7 @@ from .models import StatusEnum, ProcessingState
 from .serializers import EventIngestSerializer
 from ..common.permissions import HasAPIPermission
 from .tasks import process_events_batch
+from django.conf import settings
 
 
 def enqueue_event(event):
@@ -14,9 +15,14 @@ def enqueue_event(event):
     state.status = StatusEnum.QUEUED
     state.save(update_fields=["status"])
 
-    transaction.on_commit(
-        lambda: process_events_batch.delay()
-    )
+    # Due to integration tests
+    def dispatch():
+        process_events_batch.delay()
+
+    if getattr(settings, "RUN_TASKS_IMMEDIATELY", False):
+        dispatch()
+    else:
+        transaction.on_commit(dispatch)
 
 
 class EventIngestView(APIView):
