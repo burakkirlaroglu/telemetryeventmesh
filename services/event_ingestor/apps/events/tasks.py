@@ -91,7 +91,7 @@ def process_events_batch(self, batch_size=10):
                 r.publish("tem:events", json.dumps(payload))
 
 
-            except Exception:
+            except Exception as e:
                 state.status = StatusEnum.FAILED
                 state.save(update_fields=["status", "updated_at"])
 
@@ -100,6 +100,7 @@ def process_events_batch(self, batch_size=10):
                     "event_id": str(state.event_id),
                     "worker_id": state.worker_id,
                     "status": "failed",
+                    "exception": e,
                 }))
 
     return processed_count
