@@ -66,6 +66,7 @@ def process_events_batch(self, batch_size=10):
                 payload = {
                     "type": "event.update",
                     "event_id": str(state.event_id),
+                    "user_id": str(state.event.user_id),
                     "status": state.status,
                 }
 
@@ -85,6 +86,7 @@ def process_events_batch(self, batch_size=10):
                 payload = {
                     "type": "event.update",
                     "event_id": str(state.event_id),
+                    "user_id": str(state.event.user_id),
                     "status": state.status,
                 }
 
