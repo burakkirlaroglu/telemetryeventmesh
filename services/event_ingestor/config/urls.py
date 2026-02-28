@@ -26,4 +26,5 @@ urlpatterns = [
 
 urlpatterns += [
     path("api/", include("apps.events.urls")),
+    path("internal/", include("apps.accounts.urls")),
 ]

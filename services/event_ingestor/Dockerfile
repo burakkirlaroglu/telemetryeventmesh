@@ -20,4 +20,4 @@ ENV DJANGO_SETTINGS_MODULE=config.settings.prod
 
 EXPOSE 8002
 
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8002"]
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8002", "--access-logfile", "-", "--error-logfile", "-", "--log-level", "info"]
