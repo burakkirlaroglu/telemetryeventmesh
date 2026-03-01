@@ -32,6 +32,7 @@ class StatusEnum(TextChoices):
     PROCESSING = "processing", "Processing"
     PROCESSED = "processed", "Processed"
     FAILED = "failed", "Failed"
+    EXTINCT = "extinct", "Extinct"
 
 
 class ProcessingState(models.Model):
@@ -53,9 +54,22 @@ class ProcessingState(models.Model):
     locked_at = models.DateTimeField(null=True, blank=True)
     worker_id = models.CharField(max_length=64, null=True, blank=True)
 
+    retry_count = models.PositiveIntegerField(default=0)
+
+    last_error = models.TextField(
+        null=True,
+        blank=True,
+    )
+
+    next_retry_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
     class Meta:
         indexes = [
             models.Index(fields=["status"], name="idx_processing_status"),
+            models.Index(fields=["next_retry_at"], name="idx_retry_schedule"),
         ]
 
     def __str__(self):

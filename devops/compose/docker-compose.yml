@@ -161,20 +161,6 @@ services:
       - internal_net
       - data_net
 
-  worker:
-    build:
-      context: ../../services/event_ingestor
-    command: celery -A config worker -l info
-    depends_on:
-      - rabbitmq
-      - redis
-      - postgres
-    env_file:
-      - .env
-    networks:
-      - internal_net
-      - data_net
-
   celery_beat:
     build:
       context: ../../services/event_ingestor

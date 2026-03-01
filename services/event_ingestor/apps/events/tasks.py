@@ -4,7 +4,9 @@ from celery import shared_task
 from django.db import transaction, IntegrityError
 import redis
 from django.conf import settings
+from django.db.models import F
 
+from .helpers import calculate_backoff
 from .models import ProcessingState, StatusEnum, ProcessedEventLog
 import logging
 import json
@@ -94,16 +96,51 @@ def process_events_batch(self, batch_size=10):
 
 
             except Exception as e:
-                state.status = StatusEnum.FAILED
-                state.save(update_fields=["status", "updated_at"])
 
-                logger.error(json.dumps({
-                    "type": "event.process.failed",
-                    "event_id": str(state.event_id),
-                    "worker_id": state.worker_id,
-                    "status": "failed",
-                    "exception": e,
-                }))
+                ProcessingState.objects.filter(pk=state.pk).update(
+                    retry_count=F("retry_count") + 1
+                )
+
+                state.refresh_from_db()
+
+                next_retry = state.retry_count
+
+                if next_retry > settings.MAX_RETRY_COUNT:
+                    state.status = StatusEnum.EXTINCT
+                    state.retry_count = next_retry
+                    state.last_error = str(e)
+                    state.next_retry_at = None
+                    state.save(update_fields=[
+                        "status", "retry_count", "last_error", "next_retry_at", "updated_at"
+                    ])
+
+                    logger.error(json.dumps({
+                        "type": "event.process.extinct",
+                        "event_id": str(state.event_id),
+                        "worker_id": state.worker_id,
+                        "retry_count": state.retry_count,
+                        "exception": str(e),
+                    }))
+                else:
+                    state.status = StatusEnum.FAILED
+                    state.retry_count = next_retry
+                    state.last_error = str(e)
+
+                    delay = calculate_backoff(state.retry_count)
+                    state.next_retry_at = timezone.now() + delay
+
+                    state.save(update_fields=[
+                        "status", "retry_count", "last_error", "next_retry_at", "updated_at"
+                    ])
+
+                    logger.error(json.dumps({
+                        "type": "event.process.failed",
+                        "event_id": str(state.event_id),
+                        "worker_id": state.worker_id,
+                        "retry_count": state.retry_count,
+                        "next_retry_at": state.next_retry_at.isoformat() if state.next_retry_at else None,
+                        "exception": str(e),
+                    }))
 
     return processed_count
 
@@ -138,3 +175,39 @@ def recover_stuck_processing(timeout_seconds=60, batch_size=50):
     }))
 
     return recovered
+
+
+@shared_task(queue="maintenance_queue")
+def retry_failed_events(batch_size=100):
+    now = timezone.now()
+
+    with transaction.atomic():
+        states = (
+            ProcessingState.objects
+            .select_for_update(skip_locked=True)
+            .filter(
+                status=StatusEnum.FAILED,
+                next_retry_at__lte=now,
+            )
+            .order_by("next_retry_at")[:batch_size]
+        )
+
+        updated_count = 0
+
+        for state in states:
+            state.status = StatusEnum.QUEUED
+            state.locked_at = None
+            state.worker_id = None
+            state.save(update_fields=[
+                "status",
+                "locked_at",
+                "worker_id",
+                "updated_at",
+            ])
+
+            updated_count += 1
+
+        if updated_count:
+            process_events_batch.apply_async(queue="processing_queue")
+
+    return len(states)
