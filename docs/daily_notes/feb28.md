@@ -146,7 +146,7 @@ AWS SQS, Kafka consumers, Google PubSub benzer bir mantığı kullanıyor olabil
 Yeni state:
 
 ```
-OVER
+EXTINCT
 ```
 
 eklendi.
@@ -169,7 +169,7 @@ QUEUED
    → FAILED
      → RETRY
        → FAILED
-         → OVER
+         → EXTINCT
 ```
 
 Bu noktada TEM:
@@ -253,7 +253,7 @@ exponential davranış doğrulandı.
 MAX_RETRY_COUNT aşıldığında:
 
 ```
-status → OVER
+status → EXTINCT
 retry durur
 ```
 

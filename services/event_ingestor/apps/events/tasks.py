@@ -4,6 +4,7 @@ from celery import shared_task
 from django.db import transaction, IntegrityError
 import redis
 from django.conf import settings
+from django.db.models import F
 
 from .helpers import calculate_backoff
 from .models import ProcessingState, StatusEnum, ProcessedEventLog
@@ -95,12 +96,17 @@ def process_events_batch(self, batch_size=10):
 
 
             except Exception as e:
+
+                ProcessingState.objects.filter(pk=state.pk).update(
+                    retry_count=F("retry_count") + 1
+                )
+
                 state.refresh_from_db()
 
-                next_retry = state.retry_count + 1
+                next_retry = state.retry_count
 
                 if next_retry > settings.MAX_RETRY_COUNT:
-                    state.status = StatusEnum.OVER
+                    state.status = StatusEnum.EXTINCT
                     state.retry_count = next_retry
                     state.last_error = str(e)
                     state.next_retry_at = None
@@ -109,7 +115,7 @@ def process_events_batch(self, batch_size=10):
                     ])
 
                     logger.error(json.dumps({
-                        "type": "event.process.over",
+                        "type": "event.process.extinct",
                         "event_id": str(state.event_id),
                         "worker_id": state.worker_id,
                         "retry_count": state.retry_count,

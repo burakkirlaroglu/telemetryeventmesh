@@ -32,7 +32,7 @@ class StatusEnum(TextChoices):
     PROCESSING = "processing", "Processing"
     PROCESSED = "processed", "Processed"
     FAILED = "failed", "Failed"
-    OVER = "over", "Over"
+    EXTINCT = "extinct", "Extinct"
 
 
 class ProcessingState(models.Model):
