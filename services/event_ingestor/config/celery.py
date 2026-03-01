@@ -23,4 +23,8 @@ app.conf.beat_schedule = {
         "task": "apps.events.tasks.recover_stuck_processing",
         "schedule": 60.0,
     },
+    "retry-failed-events": {
+        "task": "apps.events.tasks.retry_failed_events",
+        "schedule": 60.0,
+    },
 }
