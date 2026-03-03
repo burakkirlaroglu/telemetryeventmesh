@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Event
+from .models import Event, ProcessingState
 
 
 class EventIngestSerializer(serializers.ModelSerializer):
@@ -21,3 +21,16 @@ class EventIngestSerializer(serializers.ModelSerializer):
             user=request.user,
             **validated_data,
         )
+
+
+class ExtinctEventSerializer(serializers.ModelSerializer):
+    event_id = serializers.UUIDField(source="event.id")
+
+    class Meta:
+        model = ProcessingState
+        fields = [
+            "event_id",
+            "retry_count",
+            "last_error",
+            "updated_at",
+        ]

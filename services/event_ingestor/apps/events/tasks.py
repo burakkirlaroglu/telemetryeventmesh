@@ -11,6 +11,8 @@ from .models import ProcessingState, StatusEnum, ProcessedEventLog
 import logging
 import json
 
+from .retry_rules import classify_exception, RetryDecision
+
 logger = logging.getLogger(__name__)
 
 
@@ -96,6 +98,7 @@ def process_events_batch(self, batch_size=10):
 
 
             except Exception as e:
+                rule = classify_exception(e)
 
                 ProcessingState.objects.filter(pk=state.pk).update(
                     retry_count=F("retry_count") + 1
@@ -104,11 +107,12 @@ def process_events_batch(self, batch_size=10):
                 state.refresh_from_db()
 
                 next_retry = state.retry_count
+                state.last_error = str(e)
 
-                if next_retry > settings.MAX_RETRY_COUNT:
+                # Permanent ise direkt EXTINCT
+                if rule.decision == RetryDecision.EXTINCT:
                     state.status = StatusEnum.EXTINCT
                     state.retry_count = next_retry
-                    state.last_error = str(e)
                     state.next_retry_at = None
                     state.save(update_fields=[
                         "status", "retry_count", "last_error", "next_retry_at", "updated_at"
@@ -119,28 +123,54 @@ def process_events_batch(self, batch_size=10):
                         "event_id": str(state.event_id),
                         "worker_id": state.worker_id,
                         "retry_count": state.retry_count,
+                        "reason": rule.reason,
                         "exception": str(e),
                     }))
-                else:
-                    state.status = StatusEnum.FAILED
+                    continue
+
+                # Retry - max_retry check
+                if next_retry > settings.MAX_RETRY_COUNT:
+                    state.status = StatusEnum.EXTINCT
                     state.retry_count = next_retry
-                    state.last_error = str(e)
-
-                    delay = calculate_backoff(state.retry_count)
-                    state.next_retry_at = timezone.now() + delay
-
+                    state.next_retry_at = None
                     state.save(update_fields=[
                         "status", "retry_count", "last_error", "next_retry_at", "updated_at"
                     ])
 
                     logger.error(json.dumps({
-                        "type": "event.process.failed",
+                        "type": "event.process.extinct",
                         "event_id": str(state.event_id),
                         "worker_id": state.worker_id,
                         "retry_count": state.retry_count,
-                        "next_retry_at": state.next_retry_at.isoformat() if state.next_retry_at else None,
+                        "reason": "max_retry_exceeded",
                         "exception": str(e),
                     }))
+                    continue
+
+                # backoff (use it if override)
+                state.status = StatusEnum.FAILED
+                state.retry_count = next_retry
+
+                if rule.override_backoff_seconds is not None:
+                    delay_seconds = rule.override_backoff_seconds
+                    state.next_retry_at = timezone.now() + timedelta(seconds=delay_seconds)
+                else:
+                    delay = calculate_backoff(state.retry_count)
+                    state.next_retry_at = timezone.now() + delay
+
+                state.save(update_fields=[
+                    "status", "retry_count", "last_error", "next_retry_at", "updated_at"
+                ])
+
+                logger.error(json.dumps({
+                    "type": "event.process.failed",
+                    "event_id": str(state.event_id),
+                    "worker_id": state.worker_id,
+                    "retry_count": state.retry_count,
+                    "next_retry_at": state.next_retry_at.isoformat() if state.next_retry_at else None,
+                    "reason": rule.reason,
+                    "exception": str(e),
+                }))
 
     return processed_count
 

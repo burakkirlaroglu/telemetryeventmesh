@@ -1,4 +1,5 @@
 # TelemetryEventMesh
+[![CI](https://github.com/burakkirlaroglu/telemetryeventmesh/actions/workflows/ci.yml/badge.svg)](https://github.com/burakkirlaroglu/telemetryeventmesh/actions/workflows/ci.yml)
 
 ---
 

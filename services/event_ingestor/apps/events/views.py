@@ -8,6 +8,8 @@ from .serializers import EventIngestSerializer
 from ..common.permissions import HasAPIPermission
 from .tasks import process_events_batch
 from django.conf import settings
+from rest_framework.generics import ListAPIView
+from .serializers import ExtinctEventSerializer
 
 
 def enqueue_event(event):
@@ -50,4 +52,18 @@ class EventIngestView(APIView):
                 "event_id": str(event.id),
             },
             status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class ExtinctEventListView(ListAPIView):
+    required_permission = "events.get.event_list_extinct"
+    permission_classes = [HasAPIPermission]
+    serializer_class = ExtinctEventSerializer
+
+    def get_queryset(self):
+        return (
+            ProcessingState.objects
+            .select_related("event")
+            .filter(status=StatusEnum.EXTINCT)
+            .order_by("-updated_at")
         )

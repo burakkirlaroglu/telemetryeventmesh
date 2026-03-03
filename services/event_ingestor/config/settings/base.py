@@ -10,8 +10,8 @@ env = environ.Env(
 )
 
 task_acks_late = True
-task_reject_on_worker_lost = True   # worker ölürse mesaj broker a geri düşsün
-worker_prefetch_multiplier = 1      # her worker aynı anda az iş alsın
+task_reject_on_worker_lost = True  # worker ölürse mesaj broker a geri düşsün
+worker_prefetch_multiplier = 1  # her worker aynı anda az iş alsın
 
 environ.Env.read_env(BASE_DIR / ".env")
 
@@ -94,4 +94,6 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
 }
