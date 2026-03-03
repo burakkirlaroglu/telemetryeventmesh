@@ -109,7 +109,7 @@ def process_events_batch(self, batch_size=10):
                 next_retry = state.retry_count
                 state.last_error = str(e)
 
-                # Permanent ise direkt EXTINCT
+                # If Permanent set extinct
                 if rule.decision == RetryDecision.EXTINCT:
                     state.status = StatusEnum.EXTINCT
                     state.retry_count = next_retry
